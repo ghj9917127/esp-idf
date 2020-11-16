@@ -10,9 +10,11 @@
 #ifndef _NET_H_
 #define _NET_H_
 
-#include "mesh_util.h"
-#include "mesh_kernel.h"
 #include "mesh_access.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define BLE_MESH_NET_FLAG_KR       BIT(0)
 #define BLE_MESH_NET_FLAG_IVU      BIT(1)
@@ -44,11 +46,11 @@ struct bt_mesh_app_key {
 struct bt_mesh_subnet {
     u32_t beacon_sent;        /* Timestamp of last sent beacon */
     u8_t  beacons_last;       /* Number of beacons during last
-                   * observation window
-                   */
-    u8_t  beacons_cur;        /* Number of beaconds observed during
-                   * currently ongoing window.
-                   */
+                               * observation window
+                               */
+    u8_t  beacons_cur;        /* Number of beacons observed during
+                               * currently ongoing window.
+                               */
 
     u8_t  beacon_cache[21];   /* Cached last authenticated beacon */
 
@@ -67,7 +69,7 @@ struct bt_mesh_subnet {
         u8_t nid;           /* NID */
         u8_t enc[16];       /* EncKey */
         u8_t net_id[8];     /* Network ID */
-#if defined(CONFIG_BLE_MESH_GATT_PROXY)
+#if defined(CONFIG_BLE_MESH_GATT_PROXY_SERVER)
         u8_t identity[16];  /* IdentityKey */
 #endif
         u8_t privacy[16];   /* PrivacyKey */
@@ -115,6 +117,12 @@ struct bt_mesh_friend {
 
     struct bt_mesh_friend_seg {
         sys_slist_t queue;
+
+        /* The target number of segments, i.e. not necessarily
+         * the current number of segments, in the queue. This is
+         * used for Friend Queue free space calculations.
+         */
+        u8_t        seg_count;
     } seg[FRIEND_SEG_RX];
 
     struct net_buf *last;
@@ -202,14 +210,17 @@ struct bt_mesh_lpn {
 
 /* bt_mesh_net.flags */
 enum {
+    BLE_MESH_NODE,            /* Device is a node */
+    BLE_MESH_PROVISIONER,     /* Device is a Provisioner */
     BLE_MESH_VALID,           /* We have been provisioned */
+    BLE_MESH_VALID_PROV,      /* Provisioner has been enabled */
     BLE_MESH_SUSPENDED,       /* Network is temporarily suspended */
     BLE_MESH_IVU_IN_PROGRESS, /* IV Update in Progress */
     BLE_MESH_IVU_INITIATOR,   /* IV Update initiated by us */
     BLE_MESH_IVU_TEST,        /* IV Update test mode */
     BLE_MESH_IVU_PENDING,     /* Update blocked by SDU in progress */
 
-    /* pending storage actions */
+    /* pending storage actions, must reside within first 32 flags */
     BLE_MESH_RPL_PENDING,
     BLE_MESH_KEYS_PENDING,
     BLE_MESH_NET_PENDING,
@@ -218,6 +229,7 @@ enum {
     BLE_MESH_HB_PUB_PENDING,
     BLE_MESH_CFG_PENDING,
     BLE_MESH_MOD_PENDING,
+    BLE_MESH_VA_PENDING,
 
     /* Don't touch - intentionally last */
     BLE_MESH_FLAG_COUNT,
@@ -289,7 +301,7 @@ struct bt_mesh_net_rx {
            net_if: 2,      /* Network interface */
            local_match: 1, /* Matched a local element */
            friend_match: 1; /* Matched an LPN we're friends for */
-    s8_t   rssi;
+    u16_t  msg_cache_idx;  /* Index of entry in message cache */
 };
 
 /* Encoding context for Network/Transport data */
@@ -311,6 +323,8 @@ extern struct bt_mesh_net bt_mesh;
 #define BLE_MESH_NET_IVI_RX(rx) (bt_mesh.iv_index - (rx)->old_iv)
 
 #define BLE_MESH_NET_HDR_LEN 9
+
+void bt_mesh_msg_cache_clear(u16_t unicast_addr, u8_t elem_num);
 
 int bt_mesh_net_keys_create(struct bt_mesh_subnet_keys *keys,
                             const u8_t key[16]);
@@ -335,8 +349,8 @@ void bt_mesh_net_sec_update(struct bt_mesh_subnet *sub);
 struct bt_mesh_subnet *bt_mesh_subnet_get(u16_t net_idx);
 
 struct bt_mesh_subnet *bt_mesh_subnet_find(const u8_t net_id[8], u8_t flags,
-        u32_t iv_index, const u8_t auth[8],
-        bool *new_key);
+                                           u32_t iv_index, const u8_t auth[8],
+                                           bool *new_key);
 
 int bt_mesh_net_encode(struct bt_mesh_net_tx *tx, struct net_buf_simple *buf,
                        bool proxy);
@@ -354,11 +368,17 @@ int bt_mesh_net_decode(struct net_buf_simple *data, enum bt_mesh_net_if net_if,
 void bt_mesh_net_recv(struct net_buf_simple *data, s8_t rssi,
                       enum bt_mesh_net_if net_if);
 
+bool bt_mesh_primary_subnet_exist(void);
+
 u32_t bt_mesh_next_seq(void);
 
 void bt_mesh_net_start(void);
 
 void bt_mesh_net_init(void);
+void bt_mesh_net_deinit(void);
+
+void bt_mesh_net_header_parse(struct net_buf_simple *buf,
+                              struct bt_mesh_net_rx *rx);
 
 /* Friendship Credential Management */
 struct friend_cred {
@@ -384,5 +404,25 @@ struct friend_cred *friend_cred_create(struct bt_mesh_subnet *sub, u16_t addr,
                                        u16_t lpn_counter, u16_t frnd_counter);
 void friend_cred_clear(struct friend_cred *cred);
 int friend_cred_del(u16_t net_idx, u16_t addr);
+
+static inline void send_cb_finalize(const struct bt_mesh_send_cb *cb,
+                                    void *cb_data)
+{
+    if (!cb) {
+        return;
+    }
+
+    if (cb->start) {
+        cb->start(0, 0, cb_data);
+    }
+
+    if (cb->end) {
+        cb->end(0, cb_data);
+    }
+}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _NET_H_ */

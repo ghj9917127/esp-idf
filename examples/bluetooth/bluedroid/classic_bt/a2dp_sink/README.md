@@ -1,3 +1,6 @@
+| Supported Targets | ESP32 |
+| ----------------- | ----- |
+
 ESP-IDF A2DP-SINK demo
 ======================
 
@@ -40,7 +43,7 @@ idf.py menuconfig
 Build the project and flash it to the board, then run monitor tool to view serial output.
 
 ```
-idf.py flash monitor
+idf.py -p PORT flash monitor
 ```
 
 (To exit the serial monitor, type ``Ctrl-]``.)

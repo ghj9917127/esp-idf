@@ -42,6 +42,7 @@ typedef enum {
     BTC_GAP_BLE_ACT_CONFIG_LOCAL_PRIVACY,
     BTC_GAP_BLE_ACT_CONFIG_LOCAL_ICON,
     BTC_GAP_BLE_ACT_UPDATE_WHITE_LIST,
+    BTC_GAP_BLE_ACT_CLEAR_WHITE_LIST,
     BTC_GAP_BLE_ACT_SET_CONN_PARAMS,
     BTC_GAP_BLE_ACT_SET_DEV_NAME,
     BTC_GAP_BLE_ACT_CFG_ADV_DATA_RAW,
@@ -56,6 +57,7 @@ typedef enum {
     BTC_GAP_BLE_REMOVE_BOND_DEV_EVT,
     BTC_GAP_BLE_OOB_REQ_REPLY_EVT,
     BTC_GAP_BLE_UPDATE_DUPLICATE_SCAN_EXCEPTIONAL_LIST,
+    BTC_GAP_BLE_SET_AFH_CHANNELS,
 } btc_gap_ble_act_t;
 
 /* btc_ble_gap_args_t */
@@ -179,6 +181,10 @@ typedef union {
     struct read_rssi_args {
         esp_bd_addr_t remote_addr;
     } read_rssi;
+    // BTC_GAP_BLE_SET_AFH_CHANNELS
+    struct set_channels_args {
+       esp_gap_ble_channels channels;
+    } set_channels;
 } btc_ble_gap_args_t;
 
 void btc_gap_ble_call_handler(btc_msg_t *msg);

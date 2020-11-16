@@ -418,7 +418,6 @@ typedef tBTM_START_ADV_CMPL_CBACK tBTA_START_ADV_CMPL_CBACK;
 
 typedef tBTM_START_STOP_ADV_CMPL_CBACK tBTA_START_STOP_ADV_CMPL_CBACK;
 
-
 typedef tBTM_ADD_WHITELIST_CBACK tBTA_ADD_WHITELIST_CBACK;
 
 typedef tBTM_SET_PKT_DATA_LENGTH_CBACK tBTA_SET_PKT_DATA_LENGTH_CBACK;
@@ -432,6 +431,11 @@ typedef tBTM_CMPL_CB tBTA_CMPL_CB;
 typedef tBTM_TX_POWER_RESULTS tBTA_TX_POWER_RESULTS;
 
 typedef tBTM_RSSI_RESULTS tBTA_RSSI_RESULTS;
+
+typedef tBTM_SET_AFH_CHANNELS_RESULTS tBTA_SET_AFH_CHANNELS_RESULTS;
+typedef tBTM_BLE_SET_CHANNELS_RESULTS tBTA_BLE_SET_CHANNELS_RESULTS;
+
+typedef tBTM_REMOTE_DEV_NAME tBTA_REMOTE_DEV_NAME;
 
 /* advertising channel map */
 #define BTA_BLE_ADV_CHNL_37 BTM_BLE_ADV_CHNL_37
@@ -600,10 +604,10 @@ typedef struct {
 
 typedef union {
     tBLE_BD_ADDR                            target_addr;
-    tBTA_DM_BLE_PF_LOCAL_NAME_COND             local_name; /* lcoal name filtering */
-    tBTA_DM_BLE_PF_MANU_COND                   manu_data;  /* manufactuer data filtering */
+    tBTA_DM_BLE_PF_LOCAL_NAME_COND             local_name; /* local name filtering */
+    tBTA_DM_BLE_PF_MANU_COND                   manu_data;  /* manufacturer data filtering */
     tBTA_DM_BLE_PF_UUID_COND                   srvc_uuid;  /* service UUID filtering */
-    tBTA_DM_BLE_PF_UUID_COND                   solicitate_uuid;   /* solicitated service UUID filtering */
+    tBTA_DM_BLE_PF_UUID_COND                   solicitate_uuid;   /* solicited service UUID filtering */
     tBTA_DM_BLE_PF_SRVC_PATTERN_COND           srvc_data;      /* service data pattern */
 } tBTA_DM_BLE_PF_COND_PARAM;
 
@@ -651,6 +655,7 @@ typedef UINT8 tBTA_SIG_STRENGTH_MASK;
 #define BTA_DM_ENER_INFO_READ           28      /* Energy info read */
 #define BTA_DM_BLE_DEV_UNPAIRED_EVT     29      /* BLE unpair event */
 #define BTA_DM_SP_KEY_REQ_EVT           30      /* Simple Pairing Passkey request */
+#define BTA_DM_PM_MODE_CHG_EVT          31      /* Mode changed event */
 
 typedef UINT8 tBTA_DM_SEC_EVT;
 
@@ -780,6 +785,7 @@ typedef struct {
     tBLE_ADDR_TYPE  addr_type;          /* Peer device address type */
     tBT_DEVICE_TYPE dev_type;
     UINT8           auth_mode;
+    BOOLEAN           sc_support;         /* Denotes if peer device supported secure connection while bonding. */
 } tBTA_DM_AUTH_CMPL;
 
 
@@ -795,6 +801,7 @@ typedef struct {
 
 /* Structure associated with BTA_DM_LINK_UP_EVT */
 typedef struct {
+    BOOLEAN         sc_downgrade;       /* Security downgrade state. */
     BD_ADDR         bd_addr;            /* BD address peer device. */
 #if BLE_INCLUDED == TRUE
     tBTA_TRANSPORT  link_type;
@@ -871,6 +878,12 @@ typedef tBTM_LE_AUTH_REQ       tBTA_LE_AUTH_REQ;       /* combination of the abo
 #endif
 typedef tBTM_OOB_DATA   tBTA_OOB_DATA;
 
+#define BTA_PM_MD_ACTIVE    BTM_PM_MD_ACTIVE    /* 0 Active mode */
+#define BTA_PM_MD_HOLD      BTM_PM_MD_HOLD      /* 1 Hold mode */
+#define BTA_PM_MD_SNIFF     BTM_PM_MD_SNIFF     /* 2 Sniff mode */
+#define BTA_PM_MD_PARK      BTM_PM_MD_PARK      /* 3 Park state */
+typedef tBTM_PM_MODE tBTA_PM_MODE;
+
 /* Structure associated with BTA_DM_SP_CFM_REQ_EVT */
 typedef struct {
     /* Note: First 3 data members must be, bd_addr, dev_class, and bd_name in order */
@@ -929,13 +942,20 @@ typedef struct {
     tBTA_STATUS     result;    /* TRUE of bond cancel succeeded, FALSE if failed. */
 } tBTA_DM_BOND_CANCEL_CMPL;
 
+/* Structure associated with BTA_DM_PM_MODE_CHG_EVT */
+typedef struct {
+    BD_ADDR         bd_addr;            /* BD address peer device. */
+    tBTA_PM_MODE    mode;               /* the new connection role */
+} tBTA_DM_MODE_CHG;
+
+
 /* Union of all security callback structures */
 typedef union {
     tBTA_DM_ENABLE              enable;             /* BTA enabled */
     tBTA_DM_PIN_REQ             pin_req;            /* PIN request. */
     tBTA_DM_AUTH_CMPL           auth_cmpl;          /* Authentication complete indication. */
     tBTA_DM_AUTHORIZE           authorize;          /* Authorization request. */
-    tBTA_DM_LINK_UP             link_up;            /* ACL connection down event */
+    tBTA_DM_LINK_UP             link_up;            /* ACL connection up event */
     tBTA_DM_LINK_DOWN           link_down;          /* ACL connection down event */
     tBTA_DM_BUSY_LEVEL          busy_level;         /* System busy level */
     tBTA_DM_SP_CFM_REQ          cfm_req;            /* user confirm request */
@@ -949,6 +969,9 @@ typedef union {
     tBTA_DM_BLE_KEY             ble_key;            /* BLE SMP keys used when pairing */
     tBTA_BLE_LOCAL_ID_KEYS      ble_id_keys;        /* IR event */
     BT_OCTET16                  ble_er;             /* ER event data */
+#if BTA_DM_PM_INCLUDED
+    tBTA_DM_MODE_CHG            mode_chg;           /* mode change event */
+#endif ///BTA_DM_PM_INCLUDED
 } tBTA_DM_SEC;
 
 /* Security callback */
@@ -1101,15 +1124,22 @@ typedef struct {
     tBT_UUID            service;        /* GATT based Services UUID found on peer device. */
 } tBTA_DM_DISC_BLE_RES;
 
+/* Structure associated with tBTA_DM_RMTNAME_CMPL */
+typedef struct {
+    BD_ADDR     bd_addr;
+    BD_NAME     bd_name;
+    tBTA_CMPL_CB        *read_rmtname_cb;
+} tBTA_DM_RMTNAME_CMPL;
 
 /* Union of all search callback structures */
 typedef union {
-    tBTA_DM_INQ_RES     inq_res;        /* Inquiry result for a peer device. */
-    tBTA_DM_INQ_CMPL    inq_cmpl;       /* Inquiry complete. */
-    tBTA_DM_DISC_RES    disc_res;       /* Discovery result for a peer device. */
+    tBTA_DM_INQ_RES         inq_res;        /* Inquiry result for a peer device. */
+    tBTA_DM_INQ_CMPL        inq_cmpl;       /* Inquiry complete. */
+    tBTA_DM_DISC_RES        disc_res;       /* Discovery result for a peer device. */
     tBTA_DM_DISC_BLE_RES    disc_ble_res;   /* Discovery result for GATT based service */
     tBTA_DM_DI_DISC_CMPL    di_disc;        /* DI discovery result for a peer device */
-    tBTA_DM_INQ_DISCARD     inq_dis;       /* the discarded packets information of inquiry */
+    tBTA_DM_INQ_DISCARD     inq_dis;        /* the discarded packets information of inquiry */
+    tBTA_DM_RMTNAME_CMPL    rmt_name;       /* the remote name information */
 } tBTA_DM_SEARCH;
 
 /* Structure of search callback event and structures */
@@ -1215,7 +1245,7 @@ typedef UINT16 tBTA_DM_LP_MASK;
 #define BTA_DM_PM_ACTIVE       0x40       /* prefers active mode */
 #define BTA_DM_PM_RETRY        0x80       /* retry power mode based on current settings */
 #define BTA_DM_PM_SUSPEND      0x04       /* prefers suspend mode */
-#define BTA_DM_PM_NO_PREF      0x01       /* service has no prefernce on power mode setting. eg. connection to service got closed */
+#define BTA_DM_PM_NO_PREF      0x01       /* service has no preference on power mode setting. eg. connection to service got closed */
 
 typedef UINT8 tBTA_DM_PM_ACTION;
 
@@ -1463,6 +1493,18 @@ extern void BTA_DmSetDeviceName(const char *p_name);
 
 /*******************************************************************************
 **
+** Function         BTA_DmGetRemoteName
+**
+** Description      This function gets the peer device's Bluetooth name.
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+extern void BTA_DmGetRemoteName(BD_ADDR remote_addr, tBTA_CMPL_CB *read_remote_name_cb);
+
+/*******************************************************************************
+**
 ** Function         BTA_DmConfigEir
 **
 ** Description      This function config EIR data of the local device.
@@ -1473,13 +1515,39 @@ extern void BTA_DmSetDeviceName(const char *p_name);
 *******************************************************************************/
 extern void BTA_DmConfigEir(tBTA_DM_EIR_CONF *eir_config);
 
+/*******************************************************************************
+**
+** Function         BTA_DmSetAfhChannels
+**
+** Description      This function sets the AFH channels
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTA_DmSetAfhChannels(const uint8_t *channels, tBTA_CMPL_CB  *set_afh_cb);
+
 #if (BLE_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         BTA_DmBleSetChannels
+**
+** Description      This function sets BLE channels
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTA_DmBleSetChannels(const uint8_t *channels, tBTA_CMPL_CB  *set_channels_cb);
+
 extern void BTA_DmUpdateWhiteList(BOOLEAN add_remove,  BD_ADDR remote_addr, tBLE_ADDR_TYPE addr_type, tBTA_ADD_WHITELIST_CBACK *add_wl_cb);
+
+extern void BTA_DmClearWhiteList(void);
 
 extern void BTA_DmBleReadAdvTxPower(tBTA_CMPL_CB *cmpl_cb);
 #endif  ///BLE_INCLUDED == TRUE
 
-extern void BTA_DmBleReadRSSI(BD_ADDR remote_addr, tBTA_TRANSPORT transport, tBTA_CMPL_CB *cmpl_cb);
+extern void BTA_DmReadRSSI(BD_ADDR remote_addr, tBTA_TRANSPORT transport, tBTA_CMPL_CB *cmpl_cb);
 
 /*******************************************************************************
 **
@@ -1708,7 +1776,8 @@ extern void BTA_DmPasskeyReqReply(BOOLEAN accept, BD_ADDR bd_addr, UINT32 passke
 extern void BTA_DmAddDevice(BD_ADDR bd_addr, DEV_CLASS dev_class,
                             LINK_KEY link_key, tBTA_SERVICE_MASK trusted_mask,
                             BOOLEAN is_trusted, UINT8 key_type,
-                            tBTA_IO_CAP io_cap, UINT8 pin_length);
+                            tBTA_IO_CAP io_cap, UINT8 pin_length,
+                            UINT8 sc_support);
 
 /*******************************************************************************
 **
@@ -1757,7 +1826,7 @@ extern UINT16 BTA_DmGetConnectionState( BD_ADDR bd_addr );
 **
 ** Description      This function adds a DI record to the local SDP database.
 **
-** Returns          BTA_SUCCESS if record set sucessfully, otherwise error code.
+** Returns          BTA_SUCCESS if record set successfully, otherwise error code.
 **
 *******************************************************************************/
 extern tBTA_STATUS BTA_DmSetLocalDiRecord( tBTA_DI_RECORD *p_device_info,
@@ -2636,8 +2705,22 @@ extern void BTA_VendorInit  (void);
 **
 *******************************************************************************/
 extern void BTA_VendorCleanup (void);
-
 #endif
+
+enum {
+    BTA_COEX_EVT_SCAN_STARTED = 1,
+    BTA_COEX_EVT_SCAN_STOPPED,
+    BTA_COEX_EVT_ACL_CONNECTED,
+    BTA_COEX_EVT_ACL_DISCONNECTED,
+    BTA_COEX_EVT_STREAMING_STARTED,
+    BTA_COEX_EVT_STREAMING_STOPPED,
+    BTA_COEX_EVT_SNIFF_ENTER,
+    BTA_COEX_EVT_SNIFF_EXIT,
+    BTA_COEX_EVT_A2DP_PAUSED_ENTER,
+    BTA_COEX_EVT_A2DP_PAUSED_EXIT,
+};
+
+extern void BTA_DmCoexEventTrigger(uint32_t event);
 
 #ifdef __cplusplus
 }

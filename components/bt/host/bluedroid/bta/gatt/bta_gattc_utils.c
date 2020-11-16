@@ -598,6 +598,30 @@ void bta_gattc_clear_notif_registration(tBTA_GATTC_SERV *p_srcb, UINT16 conn_id,
 
 /*******************************************************************************
 **
+** Function         bta_gattc_clear_notif_registration_by_bda
+**
+** Description      Clear up the notification registration information by BD_ADDR.
+**
+**
+** Returns          None.
+**
+*******************************************************************************/
+void bta_gattc_clear_notif_registration_by_bda(tBTA_GATTC_RCB *p_clrcb, BD_ADDR remote_bda)
+{
+    if(p_clrcb == NULL) {
+        return;
+    }
+    for (uint8_t i = 0 ; i < BTA_GATTC_NOTIF_REG_MAX; i ++) {
+        if (p_clrcb->notif_reg[i].in_use &&
+            !bdcmp(p_clrcb->notif_reg[i].remote_bda, remote_bda))
+        {
+            memset(&p_clrcb->notif_reg[i], 0, sizeof(tBTA_GATTC_NOTIF_REG));
+        }
+    }
+}
+
+/*******************************************************************************
+**
 ** Function         bta_gattc_mark_bg_conn
 **
 ** Description      mark background connection status when a bg connection is initiated
@@ -738,7 +762,7 @@ void bta_gattc_send_open_cback( tBTA_GATTC_RCB *p_clreg, tBTA_GATT_STATUS status
 ** Returns
 **
 *******************************************************************************/
-void bta_gattc_send_connect_cback( tBTA_GATTC_RCB *p_clreg, BD_ADDR remote_bda, UINT16 conn_id, tBTA_GATT_CONN_PARAMS conn_params)
+void bta_gattc_send_connect_cback( tBTA_GATTC_RCB *p_clreg, BD_ADDR remote_bda, UINT16 conn_id, tBTA_GATT_CONN_PARAMS conn_params, UINT8 link_role)
 {
     tBTA_GATTC      cb_data;
 
@@ -747,6 +771,7 @@ void bta_gattc_send_connect_cback( tBTA_GATTC_RCB *p_clreg, BD_ADDR remote_bda, 
 
         cb_data.connect.client_if = p_clreg->client_if;
         cb_data.connect.conn_id = conn_id;
+        cb_data.connect.link_role = link_role;
         cb_data.connect.conn_params.interval = conn_params.interval;
         cb_data.connect.conn_params.latency = conn_params.latency;
         cb_data.connect.conn_params.timeout = conn_params.timeout;

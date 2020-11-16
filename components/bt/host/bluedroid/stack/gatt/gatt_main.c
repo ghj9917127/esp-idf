@@ -47,7 +47,7 @@ static void gatt_le_connect_cback (UINT16 chan, BD_ADDR bd_addr, BOOLEAN connect
                                    UINT16 reason, tBT_TRANSPORT transport);
 static void gatt_le_data_ind (UINT16 chan, BD_ADDR bd_addr, BT_HDR *p_buf);
 static void gatt_le_cong_cback(BD_ADDR remote_bda, BOOLEAN congest);
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (CLASSIC_BT_GATT_INCLUDED == TRUE)
 static void gatt_l2cif_connect_ind_cback (BD_ADDR  bd_addr, UINT16 l2cap_cid,
         UINT16 psm, UINT8 l2cap_id);
 static void gatt_l2cif_connect_cfm_cback (UINT16 l2cap_cid, UINT16 result);
@@ -56,9 +56,9 @@ static void gatt_l2cif_config_cfm_cback (UINT16 l2cap_cid, tL2CAP_CFG_INFO *p_cf
 static void gatt_l2cif_disconnect_ind_cback (UINT16 l2cap_cid, BOOLEAN ack_needed);
 static void gatt_l2cif_disconnect_cfm_cback (UINT16 l2cap_cid, UINT16 result);
 static void gatt_l2cif_data_ind_cback (UINT16 l2cap_cid, BT_HDR *p_msg);
-#endif  ///CLASSIC_BT_INCLUDED == TRUE
+#endif  ///CLASSIC_BT_GATT_INCLUDED == TRUE
 static void gatt_send_conn_cback (tGATT_TCB *p_tcb);
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (CLASSIC_BT_GATT_INCLUDED == TRUE)
 static void gatt_l2cif_congest_cback (UINT16 cid, BOOLEAN congested);
 static const tL2CAP_APPL_INFO dyn_info = {
     gatt_l2cif_connect_ind_cback,
@@ -73,7 +73,7 @@ static const tL2CAP_APPL_INFO dyn_info = {
     gatt_l2cif_congest_cback,
     NULL
 } ;
-#endif  ///SMP_INCLUDED == TRUE
+#endif  ///CLASSIC_BT_GATT_INCLUDED == TRUE
 
 #if GATT_DYNAMIC_MEMORY == FALSE
 tGATT_CB  gatt_cb;
@@ -96,12 +96,15 @@ tGATT_DEFAULT gatt_default;
 void gatt_init (void)
 {
     tL2CAP_FIXED_CHNL_REG  fixed_reg;
+
 #if GATT_DYNAMIC_MEMORY
     gatt_cb_ptr = (tGATT_CB *)osi_malloc(sizeof(tGATT_CB));
 #endif /* #if GATT_DYNAMIC_MEMORY */
     memset (&gatt_cb, 0, sizeof(tGATT_CB));
     memset (&fixed_reg, 0, sizeof(tL2CAP_FIXED_CHNL_REG));
 
+    gatt_cb.p_clcb_list = list_new(osi_free_func);
+    gatt_cb.p_tcb_list  = list_new(osi_free_func);
 #if defined(GATT_INITIAL_TRACE_LEVEL)
     gatt_cb.trace_level = GATT_INITIAL_TRACE_LEVEL;
 #else
@@ -125,12 +128,13 @@ void gatt_init (void)
     fixed_reg.default_idle_tout  = 0xffff;                  /* 0xffff default idle timeout */
 
     L2CA_RegisterFixedChannel (L2CAP_ATT_CID, &fixed_reg);
-#if (CLASSIC_BT_INCLUDED == TRUE)
+
+#if (CLASSIC_BT_GATT_INCLUDED == TRUE)
     /* Now, register with L2CAP for ATT PSM over BR/EDR */
     if (!L2CA_Register (BT_PSM_ATT, (tL2CAP_APPL_INFO *) &dyn_info)) {
         GATT_TRACE_ERROR ("ATT Dynamic Registration failed");
     }
-#endif  ///CLASSIC_BT_INCLUDED == TRUE
+#endif  ///CLASSIC_BT_GATT_INCLUDED == TRUE
     BTM_SetSecurityLevel(TRUE, "", BTM_SEC_SERVICE_ATT, BTM_SEC_NONE, BT_PSM_ATT, 0, 0);
     BTM_SetSecurityLevel(FALSE, "", BTM_SEC_SERVICE_ATT, BTM_SEC_NONE, BT_PSM_ATT, 0, 0);
 
@@ -166,25 +170,31 @@ void gatt_free(void)
     fixed_queue_free(gatt_cb.pending_new_srv_start_q, NULL);
     gatt_cb.pending_new_srv_start_q = NULL;
 
-    for (i = 0; i < GATT_MAX_PHY_CHANNEL; i++)
-    {
-        fixed_queue_free(gatt_cb.tcb[i].pending_enc_clcb, NULL);
-        gatt_cb.tcb[i].pending_enc_clcb = NULL;
+    list_node_t *p_node = NULL;
+    tGATT_TCB   *p_tcb  = NULL;
+    for(p_node = list_begin(gatt_cb.p_tcb_list); p_node; p_node = list_next(p_node)) {
+	p_tcb = list_node(p_node); 
+        fixed_queue_free(p_tcb->pending_enc_clcb, NULL);
+        p_tcb->pending_enc_clcb = NULL;
 
-        fixed_queue_free(gatt_cb.tcb[i].pending_ind_q, NULL);
-        gatt_cb.tcb[i].pending_ind_q = NULL;
+        fixed_queue_free(p_tcb->pending_ind_q, NULL);
+        p_tcb->pending_ind_q = NULL;
 
-        btu_free_timer(&gatt_cb.tcb[i].conf_timer_ent);
-        memset(&gatt_cb.tcb[i].conf_timer_ent, 0, sizeof(TIMER_LIST_ENT));
+        btu_free_timer(&p_tcb->conf_timer_ent);
+        memset(&p_tcb->conf_timer_ent, 0, sizeof(TIMER_LIST_ENT));
 
-        btu_free_timer(&gatt_cb.tcb[i].ind_ack_timer_ent);
-        memset(&gatt_cb.tcb[i].ind_ack_timer_ent, 0, sizeof(TIMER_LIST_ENT));
+        btu_free_timer(&p_tcb->ind_ack_timer_ent);
+        memset(&p_tcb->ind_ack_timer_ent, 0, sizeof(TIMER_LIST_ENT));
 
 #if (GATTS_INCLUDED == TRUE)
-        fixed_queue_free(gatt_cb.tcb[i].sr_cmd.multi_rsp_q, NULL);
-        gatt_cb.tcb[i].sr_cmd.multi_rsp_q = NULL;
+        fixed_queue_free(p_tcb->sr_cmd.multi_rsp_q, NULL);
+        p_tcb->sr_cmd.multi_rsp_q = NULL;
 #endif /* #if (GATTS_INCLUDED == TRUE) */
     }
+    list_free(gatt_cb.p_tcb_list);
+#if (GATTC_INCLUDED == TRUE)
+    list_free(gatt_cb.p_clcb_list);
+#endif //(GATTC_INCLUDED == TRUE)
 
 #if (GATTS_INCLUDED == TRUE)
     for (i = 0; i < GATT_MAX_SR_PROFILES; i++) {
@@ -221,12 +231,12 @@ BOOLEAN gatt_connect (BD_ADDR rem_bda, tBLE_ADDR_TYPE bd_addr_type, tGATT_TCB *p
     if (transport == BT_TRANSPORT_LE) {
         p_tcb->att_lcid = L2CAP_ATT_CID;
         gatt_ret = L2CA_ConnectFixedChnl (L2CAP_ATT_CID, rem_bda, bd_addr_type);
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (CLASSIC_BT_GATT_INCLUDED == TRUE)
     } else {
         if ((p_tcb->att_lcid = L2CA_ConnectReq(BT_PSM_ATT, rem_bda)) != 0) {
             gatt_ret = TRUE;
         }
-#endif  ///CLASSIC_BT_INCLUDED == TRUE
+#endif  ///CLASSIC_BT_GATT_INCLUDED == TRUE
 
     }
 
@@ -262,10 +272,10 @@ BOOLEAN gatt_disconnect (tGATT_TCB *p_tcb)
                     gatt_set_ch_state(p_tcb, GATT_CH_CLOSING);
                     ret = L2CA_CancelBleConnectReq (p_tcb->peer_bda);
                 }
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (CLASSIC_BT_GATT_INCLUDED == TRUE)
             } else {
                 ret = L2CA_DisconnectReq(p_tcb->att_lcid);
-#endif  ///CLASSIC_BT_INCLUDED == TRUE
+#endif  ///CLASSIC_BT_GATT_INCLUDED == TRUE
             }
         } else {
             GATT_TRACE_DEBUG ("gatt_disconnect already in closing state");
@@ -391,7 +401,7 @@ BOOLEAN gatt_act_connect (tGATT_REG *p_reg, BD_ADDR bd_addr, tBLE_ADDR_TYPE bd_a
                 GATT_TRACE_ERROR("gatt_connect failed");
                 fixed_queue_free(p_tcb->pending_enc_clcb, NULL);
                 fixed_queue_free(p_tcb->pending_ind_q, NULL);
-                memset(p_tcb, 0, sizeof(tGATT_TCB));
+		gatt_tcb_free(p_tcb);
             } else {
                 ret = TRUE;
             }
@@ -581,7 +591,7 @@ static void gatt_le_data_ind (UINT16 chan, BD_ADDR bd_addr, BT_HDR *p_buf)
 ** Returns          void
 **
 *******************************************************************************/
-#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (CLASSIC_BT_GATT_INCLUDED == TRUE)
 static void gatt_l2cif_connect_ind_cback (BD_ADDR  bd_addr, UINT16 lcid, UINT16 psm, UINT8 id)
 {
     /* do we already have a control channel for this peer? */
@@ -887,7 +897,7 @@ static void gatt_l2cif_congest_cback (UINT16 lcid, BOOLEAN congested)
     }
 
 }
-#endif  ///CLASSIC_BT_INCLUDED == TRUE
+#endif  ///CLASSIC_BT_GATT_INCLUDED == TRUE
 
 /*******************************************************************************
 **
@@ -1027,7 +1037,7 @@ void gatt_add_a_bonded_dev_for_srv_chg (BD_ADDR bda)
 ** Description      This function is called to send a service changed indication to
 **                  the specified bd address
 **
-** Returns          GATT_SUCCESS if sucessfully sent; otherwise error code
+** Returns          GATT_SUCCESS if successfully sent; otherwise error code
 **
 *******************************************************************************/
 #if (GATTS_INCLUDED == TRUE)
@@ -1145,8 +1155,8 @@ void gatt_proc_srv_chg (void)
         gatt_set_srv_chg();
         start_idx = 0;
         while (gatt_find_the_connected_bda(start_idx, bda, &found_idx, &transport)) {
-            p_tcb = &gatt_cb.tcb[found_idx];
-            srv_chg_ind_pending  = gatt_is_srv_chg_ind_pending(p_tcb);
+            p_tcb = gatt_get_tcb_by_idx(found_idx);
+	    srv_chg_ind_pending  = gatt_is_srv_chg_ind_pending(p_tcb);
 
             if (!srv_chg_ind_pending) {
                 gatt_send_srv_chg_ind(bda);

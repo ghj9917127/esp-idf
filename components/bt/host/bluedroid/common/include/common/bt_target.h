@@ -43,8 +43,7 @@
 
 
 /* OS Configuration from User config (eg: sdkconfig) */
-#define A2DP_SINK_TASK_STACK_SIZE   UC_A2DP_SINK_TASK_STACK_SIZE
-#define A2DP_SOURCE_TASK_STACK_SIZE UC_A2DP_SOURCE_TASK_STACK_SIZE
+#define BT_BTU_TASK_STACK_SIZE      UC_BTU_TASK_STACK_SIZE
 
 /******************************************************************************
 **
@@ -58,6 +57,7 @@
 #define BTC_GAP_BT_INCLUDED         TRUE
 #define BTA_SDP_INCLUDED            TRUE
 #define BTA_DM_PM_INCLUDED          TRUE
+#define BTC_DM_PM_INCLUDED          TRUE
 #define SDP_INCLUDED                TRUE
 
 #if (UC_BT_A2DP_ENABLED == TRUE)
@@ -80,6 +80,27 @@
 #define BTA_JV_INCLUDED             TRUE
 #define BTC_SPP_INCLUDED            TRUE
 #endif /* UC_BT_SPP_ENABLED */
+
+#if (UC_BT_HFP_AG_ENABLED == TRUE)
+#define BTC_HF_INCLUDED             TRUE
+#define BTA_AG_INCLUDED             TRUE
+#define PLC_INCLUDED                TRUE
+#ifndef RFCOMM_INCLUDED
+#define RFCOMM_INCLUDED             TRUE
+#endif
+#ifndef BTM_SCO_INCLUDED
+#define BTM_SCO_INCLUDED            TRUE
+#endif
+#ifndef BTM_MAX_SCO_LINKS
+#define BTM_MAX_SCO_LINKS           (1)
+#endif
+#ifndef SBC_DEC_INCLUDED
+#define SBC_DEC_INCLUDED            TRUE
+#endif
+#ifndef SBC_ENC_INCLUDED
+#define SBC_ENC_INCLUDED            TRUE
+#endif
+#endif  /* UC_BT_HFP_AG_ENABLED */
 
 #if (UC_BT_HFP_CLIENT_ENABLED == TRUE)
 #define BTC_HF_CLIENT_INCLUDED      TRUE
@@ -107,12 +128,26 @@
 #define BT_SSP_INCLUDED             TRUE
 #endif /* UC_BT_SSP_ENABLED */
 
+#if UC_BT_HID_HOST_ENABLED
+#define HID_HOST_INCLUDED           TRUE
+#define BTA_HH_INCLUDED             TRUE
+#endif /* UC_BT_HID_HOST_ENABLED */
+
 #endif /* UC_BT_CLASSIC_ENABLED */
+
+/* This is set to enable use of GAP L2CAP connections. */
+#if (VND_BT_JV_BTA_L2CAP == TRUE)
+#define BTA_JV_L2CAP_INCLUDED       TRUE
+#define GAP_CONN_INCLUDED           TRUE
+#endif /* VND_BT_JV_BTA_L2CAP */
 
 #ifndef CLASSIC_BT_INCLUDED
 #define CLASSIC_BT_INCLUDED         FALSE
 #endif /* CLASSIC_BT_INCLUDED */
 
+#ifndef CLASSIC_BT_GATT_INCLUDED
+#define CLASSIC_BT_GATT_INCLUDED    FALSE
+#endif /* CLASSIC_BT_GATT_INCLUDED */
 /******************************************************************************
 **
 ** BLE features
@@ -296,6 +331,19 @@
 #define BTA_SDP_INCLUDED FALSE
 #endif
 
+/* This is set to enable use of GAP L2CAP connections. */
+#ifndef VND_BT_JV_BTA_L2CAP
+#define VND_BT_JV_BTA_L2CAP        FALSE
+#endif
+
+#ifndef BTA_JV_L2CAP_INCLUDED
+#define BTA_JV_L2CAP_INCLUDED       FALSE
+#endif
+
+#ifndef GAP_CONN_INCLUDED
+#define GAP_CONN_INCLUDED           FALSE
+#endif
+
 /******************************************************************************
 **
 ** Stack-layer components
@@ -358,6 +406,10 @@
 #define SCAN_QUEUE_CONGEST_CHECK  TRUE
 #else
 #define SCAN_QUEUE_CONGEST_CHECK  FALSE
+#endif
+
+#ifdef UC_CONFIG_BT_GATTS_PPCP_CHAR_GAP
+#define BTM_PERIPHERAL_ENABLED   UC_CONFIG_BT_GATTS_PPCP_CHAR_GAP
 #endif
 
 #ifdef UC_BT_GATTS_SEND_SERVICE_CHANGE_MODE
@@ -592,7 +644,7 @@
 
 /* Includes WBS if TRUE */
 #ifndef BTM_WBS_INCLUDED
-#define BTM_WBS_INCLUDED            FALSE       /* TRUE includes WBS code */
+#define BTM_WBS_INCLUDED                UC_BT_HFP_WBS_ENABLE    /* TRUE includes WBS code */
 #endif
 
 /*  This is used to work around a controller bug that doesn't like Disconnect
@@ -1348,7 +1400,7 @@
 
 /* The maximum number of ports supported. */
 #ifndef MAX_RFC_PORTS
-#define MAX_RFC_PORTS               16 /*max is 30*/
+#define MAX_RFC_PORTS               8 /*max is 30*/
 #endif
 
 /* The maximum simultaneous links to different devices. */
@@ -1715,15 +1767,6 @@ Range: 2 octets
 
 #ifndef GAP_INCLUDED
 #define GAP_INCLUDED                TRUE
-#endif
-
-/* This is set to enable use of GAP L2CAP connections. */
-#ifndef GAP_CONN_INCLUDED
-#if (GAP_INCLUDED == TRUE && CLASSIC_BT_INCLUDED == TRUE)
-#define GAP_CONN_INCLUDED           TRUE
-#else
-#define GAP_CONN_INCLUDED           FALSE
-#endif
 #endif
 
 /* This is set to enable posting event for data write */

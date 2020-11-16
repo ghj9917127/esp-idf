@@ -32,7 +32,7 @@
 
 
 static wl_handle_t s_test_wl_handle;
-static void test_setup()
+static void test_setup(void)
 {
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = true,
@@ -42,7 +42,7 @@ static void test_setup()
     TEST_ESP_OK(esp_vfs_fat_spiflash_mount("/spiflash", NULL, &mount_config, &s_test_wl_handle));
 }
 
-static void test_teardown()
+static void test_teardown(void)
 {
     TEST_ESP_OK(esp_vfs_fat_spiflash_unmount("/spiflash", s_test_wl_handle));
 }
@@ -223,3 +223,15 @@ TEST_CASE("(WL) opendir, readdir, rewinddir, seekdir work as expected using UTF-
     test_teardown();
 }
 #endif
+
+#ifdef CONFIG_SPIRAM
+TEST_CASE("FATFS prefers SPI RAM for allocations", "[fatfs]")
+{
+    test_setup();
+    DIR* dir = opendir("/spiflash");
+    TEST_ASSERT_NOT_NULL(dir);
+    TEST_ASSERT(esp_ptr_external_ram(dir));
+    closedir(dir);
+    test_teardown();
+}
+#endif // CONFIG_SPIRAM

@@ -14,8 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import os
 import sys
 import unittest
+import tempfile
 
 from io import StringIO
 from pyparsing import Word, ParseException, ParseFatalException, alphanums
@@ -57,7 +59,27 @@ FRAGMENT_TYPES["test"] = SampleFragment
 class FragmentTest(unittest.TestCase):
 
     def setUp(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            self.kconfigs_source_file = os.path.join(tempfile.gettempdir(), f.name)
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            self.kconfig_projbuilds_source_file = os.path.join(tempfile.gettempdir(), f.name)
+
+        os.environ['COMPONENT_KCONFIGS_SOURCE_FILE'] = self.kconfigs_source_file
+        os.environ['COMPONENT_KCONFIGS_PROJBUILD_SOURCE_FILE'] = self.kconfig_projbuilds_source_file
+        os.environ['COMPONENT_KCONFIGS'] = ''
+        os.environ['COMPONENT_KCONFIGS_PROJBUILD'] = ''
+
+        # prepare_kconfig_files.py doesn't have to be called because COMPONENT_KCONFIGS and
+        # COMPONENT_KCONFIGS_PROJBUILD are empty
+
         self.sdkconfig = SDKConfig("data/Kconfig", "data/sdkconfig")
+
+    def tearDown(self):
+        try:
+            os.remove(self.kconfigs_source_file)
+            os.remove(self.kconfig_projbuilds_source_file)
+        except Exception:
+            pass
 
     @staticmethod
     def create_fragment_file(contents, name="test_fragment.lf"):
@@ -496,6 +518,59 @@ entries:
 entries:
     if B = y:
         .section1
+""")
+
+        with self.assertRaises(ParseFatalException):
+            FragmentFile(test_fragment, self.sdkconfig)
+
+    def test_entries_grammar(self):
+
+        test_fragment = self.create_fragment_file(u"""
+[sections:test]
+entries:
+    _valid1
+    valid2.
+    .valid3_-
+""")
+
+        fragment_file = FragmentFile(test_fragment, self.sdkconfig)
+        self.assertEqual(fragment_file.fragments[0].entries,
+                         {"_valid1", "valid2.", ".valid3_-"})
+
+        # invalid starting char
+        test_fragment = self.create_fragment_file(u"""
+[sections:test]
+entries:
+    1invalid
+""")
+
+        with self.assertRaises(ParseException):
+            FragmentFile(test_fragment, self.sdkconfig)
+
+        test_fragment = self.create_fragment_file(u"""
+[sections:test]
+entries:
+    -invalid
+""")
+
+        with self.assertRaises(ParseException):
+            FragmentFile(test_fragment, self.sdkconfig)
+
+        # + notation
+        test_fragment = self.create_fragment_file(u"""
+[sections:test]
+entries:
+    valid+
+""")
+
+        fragment_file = FragmentFile(test_fragment, self.sdkconfig)
+        self.assertEqual(fragment_file.fragments[0].entries,
+                         {"valid+"})
+
+        test_fragment = self.create_fragment_file(u"""
+[sections:test]
+entries:
+    inva+lid+
 """)
 
         with self.assertRaises(ParseFatalException):

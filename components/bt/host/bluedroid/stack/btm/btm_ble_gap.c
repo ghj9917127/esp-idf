@@ -312,6 +312,20 @@ BOOLEAN BTM_BleUpdateAdvWhitelist(BOOLEAN add_remove, BD_ADDR remote_bda, tBLE_A
 
 /*******************************************************************************
 **
+** Function         BTM_BleUpdateAdvWhitelist
+**
+** Description      Add or remove device from advertising white list
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTM_BleClearWhitelist(void)
+{
+   btm_ble_clear_white_list(); 
+}
+
+/*******************************************************************************
+**
 ** Function         BTM_BleUpdateAdvFilterPolicy
 **
 ** Description      This function update the filter policy of advertiser.
@@ -591,7 +605,7 @@ tBTM_STATUS BTM_BleBroadcast(BOOLEAN start, tBTM_START_STOP_ADV_CMPL_CBACK  *p_s
     }
 #endif
 
-    if (start && p_cb->adv_mode == BTM_BLE_ADV_DISABLE) {
+    if (start) {
         /* update adv params */
         if (!btsnd_hcic_ble_write_adv_params ((UINT16)(p_cb->adv_interval_min ? p_cb->adv_interval_min :
                                               BTM_BLE_GAP_ADV_INT),
@@ -611,19 +625,13 @@ tBTM_STATUS BTM_BleBroadcast(BOOLEAN start, tBTM_START_STOP_ADV_CMPL_CBACK  *p_s
         }
 
         status = btm_ble_start_adv ();
-    } else if (!start && p_cb->adv_mode == BTM_BLE_ADV_ENABLE) {
+    } else {
         //save the stop adv callback to the BTM env.
         p_cb->p_stop_adv_cb = p_stop_adv_cback;
         status = btm_ble_stop_adv();
 #if BLE_PRIVACY_SPT == TRUE
         btm_ble_disable_resolving_list(BTM_BLE_RL_ADV, TRUE);
 #endif
-    } else {
-        /*
-            1. start adv when adv has already started (not used)
-            2. stop adv shen adv has already stoped
-        */
-        status = BTM_SUCCESS;
     }
     return status;
 }
@@ -916,6 +924,34 @@ void BTM_BleConfigLocalIcon(uint16_t icon)
     BTM_TRACE_ERROR("%s\n", __func__);
 #endif
 }
+
+/*******************************************************************************
+**
+** Function         BTM_BleConfigConnParams
+**
+** Description      This function is called to set the connection parameters
+**
+** Parameters       int_min:  minimum connection interval
+**                  int_max:  maximum connection interval
+**                  latency:  slave latency
+**                  timeout:  supervision timeout
+**
+*******************************************************************************/
+void BTM_BleConfigConnParams(uint16_t int_min, uint16_t int_max, uint16_t latency, uint16_t timeout)
+{
+#if (defined(GAP_INCLUDED) && GAP_INCLUDED == TRUE && GATTS_INCLUDED == TRUE)
+    tGAP_BLE_ATTR_VALUE p_value;
+
+    p_value.conn_param.int_min = int_min;
+    p_value.conn_param.int_max = int_max;
+    p_value.conn_param.latency = latency;
+    p_value.conn_param.sp_tout = timeout;
+    GAP_BleAttrDBUpdate(GATT_UUID_GAP_PREF_CONN_PARAM, &p_value);
+#else
+    BTM_TRACE_ERROR("%s\n", __func__);
+#endif
+}
+
 /*******************************************************************************
 **
 ** Function          BTM_BleMaxMultiAdvInstanceCount
@@ -1138,6 +1174,7 @@ static UINT8 btm_set_conn_mode_adv_init_addr(tBTM_BLE_INQ_CB *p_cb,
 #if BLE_PRIVACY_SPT == TRUE
     UINT8 i = BTM_SEC_MAX_DEVICE_RECORDS;
     tBTM_SEC_DEV_REC    *p_dev_rec;
+    list_node_t         *p_node = NULL;
 #endif  ///BLE_PRIVACY_SPT == TRUE
     evt_type = (p_cb->connectable_mode == BTM_BLE_NON_CONNECTABLE) ? \
                ((p_cb->scan_rsp) ? BTM_BLE_DISCOVER_EVT : BTM_BLE_NON_CONNECT_EVT )\
@@ -1181,14 +1218,15 @@ static UINT8 btm_set_conn_mode_adv_init_addr(tBTM_BLE_INQ_CB *p_cb,
     if ((btm_cb.ble_ctr_cb.privacy_mode ==  BTM_PRIVACY_1_2 && p_cb->afp != AP_SCAN_CONN_ALL) ||
             btm_cb.ble_ctr_cb.privacy_mode ==  BTM_PRIVACY_MIXED) {
         /* if enhanced privacy is required, set Identity address and matching IRK peer */
-        for (i = 0; i < BTM_SEC_MAX_DEVICE_RECORDS; i ++) {
-            if ((btm_cb.sec_dev_rec[i].sec_flags & BTM_SEC_IN_USE) != 0 &&
-                    (btm_cb.sec_dev_rec[i].ble.in_controller_list & BTM_RESOLVING_LIST_BIT) != 0) {
-                memcpy(p_peer_addr_ptr, btm_cb.sec_dev_rec[i].ble.static_addr, BD_ADDR_LEN);
-                *p_peer_addr_type = btm_cb.sec_dev_rec[i].ble.static_addr_type;
+        for (p_node = list_begin(btm_cb.p_sec_dev_rec_list); p_node; p_node = list_next(p_node)) {
+            p_dev_rec = list_node(p_node);
+            if ((p_dev_rec->sec_flags & BTM_SEC_IN_USE) != 0 &&
+                    (p_dev_rec->ble.in_controller_list & BTM_RESOLVING_LIST_BIT) != 0) {
+                memcpy(p_peer_addr_ptr, p_dev_rec->ble.static_addr, BD_ADDR_LEN);
+                *p_peer_addr_type = p_dev_rec->ble.static_addr_type;
                 break;
-            }
-        }
+	    }
+	}
 
         if (i != BTM_SEC_MAX_DEVICE_RECORDS) {
             *p_own_addr_type = BLE_ADDR_RANDOM_ID;
@@ -2017,7 +2055,7 @@ UINT8 *BTM_CheckAdvData( UINT8 *p_adv, UINT8 type, UINT8 *p_length)
 **                     BTM_BLE_GENRAL_DISCOVERABLE
 **
 *******************************************************************************/
-UINT16 BTM_BleReadDiscoverability()
+UINT16 BTM_BleReadDiscoverability(void)
 {
     BTM_TRACE_API("%s\n", __FUNCTION__);
 
@@ -2034,7 +2072,7 @@ UINT16 BTM_BleReadDiscoverability()
 ** Returns          BTM_BLE_NON_CONNECTABLE or BTM_BLE_CONNECTABLE
 **
 *******************************************************************************/
-UINT16 BTM_BleReadConnectability()
+UINT16 BTM_BleReadConnectability(void)
 {
     BTM_TRACE_API ("%s\n", __FUNCTION__);
 
@@ -3955,7 +3993,7 @@ tBTM_STATUS btm_ble_stop_adv(void)
 {
     tBTM_BLE_INQ_CB *p_cb = &btm_cb.ble_ctr_cb.inq_var;
     tBTM_STATUS rt = BTM_SUCCESS;
-    if (p_cb->adv_mode == BTM_BLE_ADV_ENABLE) {
+    if (p_cb) {
         osi_mutex_lock(&adv_enable_lock, OSI_MUTEX_MAX_TIMEOUT);
         UINT8 temp_adv_mode = p_cb->adv_mode;
         BOOLEAN temp_fast_adv_on = p_cb->fast_adv_on;
@@ -4094,10 +4132,9 @@ void btm_ble_timeout(TIMER_LIST_ENT *p_tle)
 *******************************************************************************/
 void btm_ble_read_remote_features_complete(UINT8 *p)
 {
-    tACL_CONN        *p_acl_cb = &btm_cb.acl_db[0];
+    tACL_CONN        *p_acl_cb = NULL;
     UINT16            handle;
     UINT8             status;
-    int               xx;
 
     BTM_TRACE_EVENT ("btm_ble_read_remote_features_complete ");
 
@@ -4109,8 +4146,9 @@ void btm_ble_read_remote_features_complete(UINT8 *p)
         STREAM_TO_UINT16 (handle, p);
 
         /* Look up the connection by handle and copy features */
-        for (xx = 0; xx < MAX_L2CAP_LINKS; xx++, p_acl_cb++) {
-            if ((p_acl_cb->in_use) && (p_acl_cb->hci_handle == handle)) {
+        p_acl_cb = btm_handle_to_acl(handle);
+	if (p_acl_cb) {
+	    {
                 STREAM_TO_ARRAY(p_acl_cb->peer_le_features, p, BD_FEATURES_LEN);
 #if BLE_INCLUDED == TRUE
                 /* In the original Bluedroid version, slave need to send LL_VERSION_IND(call btsnd_hcic_rmt_ver_req)
@@ -4131,7 +4169,6 @@ void btm_ble_read_remote_features_complete(UINT8 *p)
                     }
                 }
 #endif
-                break;
             }
         }
     }

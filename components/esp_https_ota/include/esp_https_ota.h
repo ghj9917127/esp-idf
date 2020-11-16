@@ -15,19 +15,22 @@
 #pragma once
 
 #include <esp_http_client.h>
-#include <esp_ota_ops.h>
+#include <bootloader_common.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef void *esp_https_ota_handle_t;
+typedef esp_err_t(*http_client_init_cb_t)(esp_http_client_handle_t);
 
 /**
  * @brief ESP HTTPS OTA configuration
  */
 typedef struct {
     const esp_http_client_config_t *http_config;   /*!< ESP HTTP client configuration */
+    http_client_init_cb_t http_client_init_cb;     /*!< Callback after ESP HTTP client is initialised */
+    bool bulk_flash_erase;                         /*!< Erase entire flash partition during initialization. By default flash partition is erased during write operation and in chunk of 4K sector size */
 } esp_https_ota_config_t;
 
 #define ESP_ERR_HTTPS_OTA_BASE            (0x9000)
@@ -111,6 +114,19 @@ esp_err_t esp_https_ota_begin(esp_https_ota_config_t *ota_config, esp_https_ota_
 esp_err_t esp_https_ota_perform(esp_https_ota_handle_t https_ota_handle);
 
 /**
+ * @brief   Checks if complete data was received or not
+ *
+ * @note    This API can be called just before esp_https_ota_finish() to validate if the complete image was indeed received.
+ *
+ * @param[in]   https_ota_handle pointer to esp_https_ota_handle_t structure
+ *
+ * @return
+ *    - false
+ *    - true
+ */
+bool esp_https_ota_is_complete_data_received(esp_https_ota_handle_t https_ota_handle);
+
+/**
  * @brief    Clean-up HTTPS OTA Firmware upgrade and close HTTPS connection
  *
  * This function closes the HTTP connection and frees the ESP HTTPS OTA context.
@@ -149,7 +165,7 @@ esp_err_t esp_https_ota_finish(esp_https_ota_handle_t https_ota_handle);
 esp_err_t esp_https_ota_get_img_desc(esp_https_ota_handle_t https_ota_handle, esp_app_desc_t *new_app_info);
 
 
-/*
+/**
 * @brief  This function returns OTA image data read so far.
 *
 * @note   This API should be called only if `esp_https_ota_perform()` has been called atleast once or

@@ -22,17 +22,12 @@
 /**********************************************************
  * Thread/Task reference
  **********************************************************/
+#ifdef CONFIG_BT_BTU_TASK_STACK_SIZE
+#define UC_BTU_TASK_STACK_SIZE              CONFIG_BT_BTU_TASK_STACK_SIZE
+#else
+#define UC_BTU_TASK_STACK_SIZE              4096
+#endif
 
-#ifdef CONFIG_A2DP_SINK_TASK_STACK_SIZE
-#define UC_A2DP_SINK_TASK_STACK_SIZE        CONFIG_A2DP_SINK_TASK_STACK_SIZE
-#else
-#define UC_A2DP_SINK_TASK_STACK_SIZE        2048
-#endif
-#ifdef CONFIG_A2DP_SOURCE_TASK_STACK_SIZE
-#define UC_A2DP_SOURCE_TASK_STACK_SIZE      CONFIG_A2DP_SOURCE_TASK_STACK_SIZE
-#else
-#define UC_A2DP_SOURCE_TASK_STACK_SIZE      2048
-#endif
 
 /**********************************************************
  * Profile reference
@@ -58,11 +53,25 @@
 #define UC_BT_SPP_ENABLED                   FALSE
 #endif
 
-//HFP
+//HFP(AG)
+#ifdef CONFIG_BT_HFP_AG_ENABLE
+#define UC_BT_HFP_AG_ENABLED            CONFIG_BT_HFP_AG_ENABLE
+#else
+#define UC_BT_HFP_AG_ENABLED            FALSE
+#endif
+
+//HFP(Client)
 #ifdef CONFIG_BT_HFP_CLIENT_ENABLE
 #define UC_BT_HFP_CLIENT_ENABLED            CONFIG_BT_HFP_CLIENT_ENABLE
 #else
 #define UC_BT_HFP_CLIENT_ENABLED            FALSE
+#endif
+
+//HID HOST(BT)
+#ifdef CONFIG_BT_HID_HOST_ENABLED
+#define UC_BT_HID_HOST_ENABLED           	CONFIG_BT_HID_HOST_ENABLED
+#else
+#define UC_BT_HID_HOST_ENABLED           	FALSE
 #endif
 
 //SSP
@@ -157,6 +166,12 @@
 #define UC_BT_BLE_HOST_QUEUE_CONGESTION_CHECK   FALSE
 #endif
 
+#ifdef CONFIG_BT_GATTS_PPCP_CHAR_GAP
+#define UC_CONFIG_BT_GATTS_PPCP_CHAR_GAP        CONFIG_BT_GATTS_PPCP_CHAR_GAP
+#else
+#define UC_CONFIG_BT_GATTS_PPCP_CHAR_GAP        FALSE
+#endif
+
 #ifdef CONFIG_BT_GATTS_SEND_SERVICE_CHANGE_MODE
 #define UC_BT_GATTS_SEND_SERVICE_CHANGE_MODE    CONFIG_BT_GATTS_SEND_SERVICE_CHANGE_MODE
 #else
@@ -176,6 +191,12 @@
 #define UC_BT_HFP_AUDIO_DATA_PATH_HCI           FALSE
 #endif
 
+//Wide Band Speech
+#ifdef CONFIG_BT_HFP_WBS_ENABLE
+#define UC_BT_HFP_WBS_ENABLE                    CONFIG_BT_HFP_WBS_ENABLE
+#else
+#define UC_BT_HFP_WBS_ENABLE                    FALSE
+#endif
 
 /**********************************************************
  * Memory reference
@@ -278,10 +299,10 @@
 #define UC_BT_LOG_MCA_TRACE_LEVEL           UC_TRACE_LEVEL_WARNING
 #endif
 
-#ifdef CONFIG_BT_LOG_HID_TRACE_LEVEL
-#define UC_BT_LOG_HID_TRACE_LEVEL           CONFIG_BT_LOG_HID_TRACE_LEVEL
+#ifdef CONFIG_BT_LOG_HIDH_TRACE_LEVEL
+#define UC_BT_LOG_HIDH_TRACE_LEVEL           CONFIG_BT_LOG_HIDH_TRACE_LEVEL
 #else
-#define UC_BT_LOG_HID_TRACE_LEVEL           UC_TRACE_LEVEL_WARNING
+#define UC_BT_LOG_HIDH_TRACE_LEVEL           UC_TRACE_LEVEL_WARNING
 #endif
 
 #ifdef CONFIG_BT_LOG_APPL_TRACE_LEVEL

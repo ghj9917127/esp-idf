@@ -255,6 +255,7 @@ void *xRingbufferReceive(RingbufHandle_t xRingbuffer, size_t *pxItemSize, TickTy
  *
  * @note    A call to vRingbufferReturnItemFromISR() is required after this to free the item retrieved.
  * @note    Byte buffers do not allow multiple retrievals before returning an item
+ * @note    Two calls to RingbufferReceiveFromISR() are required if the bytes wrap around the end of the ring buffer.
  *
  * @return
  *      - Pointer to the retrieved item on success; *pxItemSize filled with the length of the item.
@@ -333,6 +334,7 @@ BaseType_t xRingbufferReceiveSplitFromISR(RingbufHandle_t xRingbuffer,
  * @note    A call to vRingbufferReturnItem() is required after this to free up the data retrieved.
  * @note    This function should only be called on byte buffers
  * @note    Byte buffers do not allow multiple retrievals before returning an item
+ * @note    Two calls to RingbufferReceiveUpTo() are required if the bytes wrap around the end of the ring buffer.
  *
  * @return
  *      - Pointer to the retrieved item on success; *pxItemSize filled with
@@ -513,10 +515,6 @@ void vRingbufferGetInfo(RingbufHandle_t xRingbuffer,
  * @param   xRingbuffer Ring buffer to show
  */
 void xRingbufferPrintInfo(RingbufHandle_t xRingbuffer);
-
-/* ------------------------------- Deprecated ------------------------------- */
-
-typedef RingbufferType_t ringbuf_type_t __attribute__((deprecated));
 
 #ifdef __cplusplus
 }

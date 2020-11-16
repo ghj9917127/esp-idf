@@ -4,7 +4,6 @@
 
 #include <esp_types.h>
 #include <stdio.h>
-#include "esp32/rom/ets_sys.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -14,6 +13,7 @@
 #include "unity.h"
 #include "soc/cpu.h"
 #include "test_utils.h"
+#include "sdkconfig.h"
 
 static volatile bool trigger;
 static volatile bool flag;
@@ -73,7 +73,7 @@ TEST_CASE("Yield from lower priority task, same CPU", "[freertos]")
 }
 
 
-#if portNUM_PROCESSORS == 2
+#if (portNUM_PROCESSORS == 2) && !CONFIG_FREERTOS_TASK_FUNCTIONS_INTO_FLASH
 TEST_CASE("Yield from lower priority task, other CPU", "[freertos]")
 {
     uint32_t trigger_ccount, yield_ccount, now_ccount, delta;
@@ -108,4 +108,4 @@ TEST_CASE("Yield from lower priority task, other CPU", "[freertos]")
         vTaskDelete(sender_task);
     }
 }
-#endif // portNUM_PROCESSORS == 2
+#endif

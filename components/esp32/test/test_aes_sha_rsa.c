@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "esp_types.h"
-#include "esp32/clk.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -11,14 +10,13 @@
 #include "soc/cpu.h"
 #include "unity.h"
 #include "test_utils.h"
-#include "esp32/rom/uart.h"
 #include "esp32/rom/sha.h"
 #include "soc/uart_periph.h"
 #include "soc/dport_reg.h"
 #include "soc/rtc.h"
 #include "esp_log.h"
 #include "mbedtls/sha256.h"
-#include "esp32/sha.h"
+#include "sha/sha_parallel_engine.h"
 #include "esp32/aes.h"
 #include "mbedtls/rsa.h"
 

@@ -53,7 +53,8 @@ typedef struct {
   *
   */
 typedef enum {
-    WIFI_LOG_ERROR = 0,   /*enabled by default*/
+    WIFI_LOG_NONE = 0,
+    WIFI_LOG_ERROR ,      /*enabled by default*/
     WIFI_LOG_WARNING,     /*enabled by default*/
     WIFI_LOG_INFO,        /*enabled by default*/
     WIFI_LOG_DEBUG,       /*can be set in menuconfig*/
@@ -103,13 +104,21 @@ typedef enum {
 esp_err_t esp_wifi_init_internal(const wifi_init_config_t *config);
 
 /**
-  * @brief  get whether the wifi driver is allowed to transmit data or not
-  *
-  * @return
-  *     - true  : upper layer should stop to transmit data to wifi driver
-  *     - false : upper layer can transmit data to wifi driver
-  */
-bool esp_wifi_internal_tx_is_stop(void);
+ * @brief Deinitialize Wi-Fi Driver
+ *     Free resource for WiFi driver, such as WiFi control structure, RX/TX buffer,
+ *     WiFi NVS structure among others.
+ *
+ * For the most part, you need not call this function directly. It gets called
+ * from esp_wifi_deinit().
+ *
+ * This function may be called, if you call esp_wifi_init_internal to initialize
+ * WiFi driver.
+ *
+ * @return
+ *    - ESP_OK: succeed
+ *    - others: refer to error code esp_err.h
+ */
+esp_err_t esp_wifi_deinit_internal(void);
 
 /**
   * @brief  free the rx buffer which allocated by wifi driver
@@ -121,17 +130,78 @@ void esp_wifi_internal_free_rx_buffer(void* buffer);
 /**
   * @brief  transmit the buffer via wifi driver
   *
+  * This API makes a copy of the input buffer and then forwards the buffer
+  * copy to WiFi driver.
+  *
   * @param  wifi_interface_t wifi_if : wifi interface id
   * @param  void *buffer : the buffer to be tansmit
   * @param  uint16_t len : the length of buffer
   *
   * @return
-  *    - ERR_OK  : Successfully transmit the buffer to wifi driver
-  *    - ERR_MEM : Out of memory
-  *    - ERR_IF : WiFi driver error
-  *    - ERR_ARG : Invalid argument
+  *    - ESP_OK  : Successfully transmit the buffer to wifi driver
+  *    - ESP_ERR_NO_MEM: out of memory
+  *    - ESP_ERR_WIFI_ARG: invalid argument
+  *    - ESP_ERR_WIFI_IF : WiFi interface is invalid
+  *    - ESP_ERR_WIFI_CONN : WiFi interface is not created, e.g. send the data to STA while WiFi mode is AP mode
+  *    - ESP_ERR_WIFI_NOT_STARTED : WiFi is not started
+  *    - ESP_ERR_WIFI_STATE : WiFi internal state is not ready, e.g. WiFi is not started
+  *    - ESP_ERR_WIFI_NOT_ASSOC : WiFi is not associated
+  *    - ESP_ERR_WIFI_TX_DISALLOW : WiFi TX is disallowed, e.g. WiFi hasn't pass the authentication 
+  *    - ESP_ERR_WIFI_POST : caller fails to post event to WiFi task
   */
 int esp_wifi_internal_tx(wifi_interface_t wifi_if, void *buffer, uint16_t len);
+
+/**
+  * @brief     The net stack buffer reference counter callback function
+  *
+  */
+typedef void (*wifi_netstack_buf_ref_cb_t)(void *netstack_buf);
+
+/**
+  * @brief     The net stack buffer free callback function
+  *
+  */
+typedef void (*wifi_netstack_buf_free_cb_t)(void *netstack_buf);
+
+/**
+  * @brief  transmit the buffer by reference via wifi driver
+  *
+  * This API firstly increases the reference counter of the input buffer and
+  * then forwards the buffer to WiFi driver. The WiFi driver will free the buffer
+  * after processing it. Use esp_wifi_internal_tx() if the uplayer buffer doesn't
+  * supports reference counter.
+  * 
+  * @param  wifi_if : wifi interface id
+  * @param  buffer : the buffer to be tansmit
+  * @param  len : the length of buffer
+  * @param  netstack_buf : the netstack buffer related to bufffer
+  *
+  * @return
+  *    - ESP_OK  : Successfully transmit the buffer to wifi driver
+  *    - ESP_ERR_NO_MEM: out of memory
+  *    - ESP_ERR_WIFI_ARG: invalid argument
+  *    - ESP_ERR_WIFI_IF : WiFi interface is invalid
+  *    - ESP_ERR_WIFI_CONN : WiFi interface is not created, e.g. send the data to STA while WiFi mode is AP mode
+  *    - ESP_ERR_WIFI_NOT_STARTED : WiFi is not started
+  *    - ESP_ERR_WIFI_STATE : WiFi internal state is not ready, e.g. WiFi is not started
+  *    - ESP_ERR_WIFI_NOT_ASSOC : WiFi is not associated
+  *    - ESP_ERR_WIFI_TX_DISALLOW : WiFi TX is disallowed, e.g. WiFi hasn't pass the authentication 
+  *    - ESP_ERR_WIFI_POST : caller fails to post event to WiFi task
+  */
+esp_err_t esp_wifi_internal_tx_by_ref(wifi_interface_t ifx, void *buffer, size_t len, void *netstack_buf);
+
+/**
+  * @brief  register the net stack buffer reference increasing and free callback
+  *
+  * @param  ref : net stack buffer reference callback
+  * @param  free: net stack buffer free callback
+  *
+  * @return
+  *    - ESP_OK  : Successfully transmit the buffer to wifi driver
+  *    - others  : failed to register the callback
+  */
+esp_err_t esp_wifi_internal_reg_netstack_buf_cb(wifi_netstack_buf_ref_cb_t ref, wifi_netstack_buf_free_cb_t free);
+
 
 /**
   * @brief     The WiFi RX callback function
@@ -256,17 +326,6 @@ esp_err_t esp_wifi_internal_wifi_type_md5_check(const char *md5);
 esp_err_t esp_wifi_internal_esp_wifi_md5_check(const char *md5);
 
 /**
-  * @brief     Check the git commit id of WiFi library
-  *
-  * @attention 1. It is used for internal CI WiFi library check
-  *
-  * @return
-  *     - ESP_OK : succeed
-  *     - ESP_FAIL : fail
-  */
-esp_err_t esp_wifi_internal_git_commit_id_check(void);
-
-/**
   * @brief     Allocate a chunk of memory for WiFi driver
   *
   * @attention This API is not used for DMA memory allocation.
@@ -370,6 +429,76 @@ esp_err_t esp_wifi_internal_get_log(wifi_log_level_t *log_level, uint32_t *log_m
   *    - others: failed
   */
 esp_err_t esp_wifi_internal_ioctl(int cmd, wifi_ioctl_config_t *cfg);
+
+/**
+  * @brief     Get the user-configured channel info 
+  *
+  * @param     ifx : WiFi interface 
+  * @param     primary : store the configured primary channel 
+  * @param     second : store the configured second channel
+  *
+  * @return    
+  *    - ESP_OK: succeed
+  */
+esp_err_t esp_wifi_internal_get_config_channel(wifi_interface_t ifx, uint8_t *primary, uint8_t *second);
+
+/**
+  * @brief     Get the negotiated channel info after WiFi connection established 
+  *
+  * @param     ifx : WiFi interface 
+  * @param     aid : the connection number when a STA connects to the softAP    
+  * @param     primary : store the negotiated primary channel 
+  * @param     second : store the negotiated second channel
+  * @attention the aid param is only works when the ESP32 in softAP/softAP+STA mode 
+  *
+  * @return    
+  *    - ESP_OK: succeed
+  */
+esp_err_t esp_wifi_internal_get_negotiated_channel(wifi_interface_t ifx, uint8_t aid, uint8_t *primary, uint8_t *second);
+
+/**
+  * @brief     Get the negotiated bandwidth info after WiFi connection established 
+  *
+  * @param     ifx : WiFi interface 
+  * @param     bw : store the negotiated bandwidth 
+  *
+  * @return    
+  *    - ESP_OK: succeed
+  */
+esp_err_t esp_wifi_internal_get_negotiated_bandwidth(wifi_interface_t ifx, uint8_t aid, uint8_t *bw);
+
+#if CONFIG_IDF_TARGET_ESP32S2
+/**
+  * @brief     Check if WiFi TSF is active 
+  *
+  * @return    
+  *    - true: Active 
+  *    - false: Not active 
+  */
+bool esp_wifi_internal_is_tsf_active(void);
+#endif
+
+/**
+  * @breif    TxDone callback function type. Should be registered using esp_wifi_set_tx_done_cb()
+  *
+  * @param    ifidx The interface id that the tx callback has been triggered from
+  * @param    data Pointer to the data transmitted
+  * @param    data_len Length of the data transmitted
+  * @param    txStatus True:if the data was transmitted sucessfully False: if data transmission failed
+  */
+typedef void (* wifi_tx_done_cb_t)(uint8_t ifidx, uint8_t *data, uint16_t *data_len, bool txStatus);
+
+/**
+  * @brief    Register the txDone callback function of type wifi_tx_done_cb_t
+  *
+  * @param    cb The callback function
+  *
+  * @return
+  *    - ESP_OK: succeed
+  *    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init
+  *    - ESP_ERR_WIFI_NOT_STARTED: WiFi is not started by esp_wifi_start
+  */
+esp_err_t esp_wifi_set_tx_done_cb(wifi_tx_done_cb_t cb);
 
 #ifdef __cplusplus
 }

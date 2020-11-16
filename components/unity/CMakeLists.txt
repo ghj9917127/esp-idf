@@ -15,12 +15,10 @@ if(CONFIG_UNITY_ENABLE_FIXTURE)
 endif()
 
 idf_component_register(SRCS "${srcs}"
-                    INCLUDE_DIRS "include" "unity/src")
+                    INCLUDE_DIRS "include" "unity/src" "unity/extras/fixture/src")
 
 target_compile_definitions(${COMPONENT_LIB} PUBLIC
     -DUNITY_INCLUDE_CONFIG_H
 )
 
-if(GCC_NOT_5_2_0)
-    target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-unused-const-variable)
-endif()
+target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-unused-const-variable)

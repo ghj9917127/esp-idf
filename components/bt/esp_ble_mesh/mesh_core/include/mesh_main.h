@@ -11,7 +11,6 @@
 #ifndef _BLE_MESH_MAIN_H_
 #define _BLE_MESH_MAIN_H_
 
-#include "mesh_util.h"
 #include "mesh_access.h"
 
 /**
@@ -20,6 +19,10 @@
  * @ingroup bt_mesh
  * @{
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum {
     BLE_MESH_NO_OUTPUT       = 0,
@@ -58,6 +61,10 @@ typedef enum {
     BLE_MESH_PROV_OOB_IN_MANUAL = BIT(14),
     BLE_MESH_PROV_OOB_ON_DEV    = BIT(15),
 } bt_mesh_prov_oob_info_t;
+
+#define BLE_MESH_PROV_STATIC_OOB_MAX_LEN    16
+#define BLE_MESH_PROV_OUTPUT_OOB_MAX_LEN    8
+#define BLE_MESH_PROV_INPUT_OOB_MAX_LEN     8
 
 /** Provisioning properties & capabilities. */
 struct bt_mesh_prov {
@@ -164,11 +171,12 @@ struct bt_mesh_prov {
      *  assigned the specified NetKeyIndex and primary element address.
      *
      *  @param net_idx  NetKeyIndex given during provisioning.
+     *  @param net_key  NetKey given during provisioning.
      *  @param addr     Primary element address.
      *  @param flags    Key Refresh & IV Update flags
      *  @param iv_index IV Index.
      */
-    void        (*complete)(u16_t net_idx, u16_t addr, u8_t flags, u32_t iv_index);
+    void        (*complete)(u16_t net_idx, const u8_t net_key[16], u16_t addr, u8_t flags, u32_t iv_index);
 
     /** @brief Node has been reset.
      *
@@ -279,7 +287,6 @@ struct bt_mesh_prov {
      *
      *  @param bearer Provisioning bearer.
      *  @param reason Provisioning link close reason(disconnect reason)
-     *                0xFF: disconnect due to provisioner_pb_gatt_disable()
      */
     void (*prov_link_close)(bt_mesh_prov_bearer_t bearer, u8_t reason);
 
@@ -295,10 +302,17 @@ struct bt_mesh_prov {
      *  @param element_num  Provisioned device element number.
      *  @param netkey_idx   Provisioned device assigned netkey index.
      */
-    void (*prov_complete)(int node_idx, const u8_t device_uuid[16],
+    void (*prov_complete)(u16_t node_idx, const u8_t device_uuid[16],
                           u16_t unicast_addr, u8_t element_num,
                           u16_t netkey_idx);
 #endif /* CONFIG_BLE_MESH_PROVISIONER */
+};
+
+enum ble_mesh_role {
+    NODE = 0,
+    PROVISIONER,
+    FAST_PROV,
+    ROLE_NVAL,
 };
 
 /* The following APIs are for BLE Mesh Node */
@@ -344,23 +358,6 @@ int bt_mesh_prov_enable(bt_mesh_prov_bearer_t bearers);
  *  @return Zero on success or (negative) error code otherwise.
  */
 int bt_mesh_prov_disable(bt_mesh_prov_bearer_t bearers);
-
-/** @brief Indicate whether provisioner is enabled
- *
- *  @return true - enabled, false - disabled.
- */
-bool bt_mesh_is_provisioner_en(void);
-
-/* The following API is for BLE Mesh Fast Provisioning */
-
-/** @brief Change the device action
- *
- *  @param[IN] action: role of device to be set
- *                     0x01 - enter, 0x02 - suspend, 0x03 - exit
- *
- *  @return status
- */
-u8_t bt_mesh_set_fast_prov_action(u8_t action);
 
 /* The following APIs are for BLE Mesh Provisioner */
 
@@ -449,6 +446,12 @@ int bt_mesh_provisioner_disable(bt_mesh_prov_bearer_t bearers);
                                               BLE_MESH_FEAT_FRIEND |    \
                                               BLE_MESH_FEAT_LOW_POWER)
 
+/** @brief Check if the mesh stack is initialized.
+ *
+ *  @return true - yes, false - no.
+ */
+bool bt_mesh_is_initialized(void);
+
 /** @brief Initialize Mesh support
  *
  *  After calling this API, the node will not automatically advertise as
@@ -463,6 +466,19 @@ int bt_mesh_provisioner_disable(bt_mesh_prov_bearer_t bearers);
 int bt_mesh_init(const struct bt_mesh_prov *prov,
                  const struct bt_mesh_comp *comp);
 
+/* BLE Mesh deinit parameters */
+struct bt_mesh_deinit_param {
+    bool erase; /* Indicate if erasing flash when deinit mesh stack */
+};
+
+/** @brief De-initialize Mesh support
+ *
+ *  @param param BLE Mesh deinit parameters.
+ *
+ *  @return Zero on success or (negative) error code otherwise.
+ */
+int bt_mesh_deinit(struct bt_mesh_deinit_param *param);
+
 /** @brief Reset the state of the local Mesh node.
  *
  *  Resets the state of the node, which means that it needs to be
@@ -473,7 +489,7 @@ int bt_mesh_init(const struct bt_mesh_prov *prov,
  *  to enable unprovisioned advertising on one or more provisioning bearers.
  *
  */
-void bt_mesh_reset(void);
+void bt_mesh_node_reset(void);
 
 /** @brief Suspend the Mesh network temporarily.
  *
@@ -515,6 +531,13 @@ int bt_mesh_provision(const u8_t net_key[16], u16_t net_idx,
                       u8_t flags, u32_t iv_index, u16_t addr,
                       const u8_t dev_key[16]);
 
+/** @brief Check if the device is an unprovisioned device
+ *         and will act as a node once provisioned.
+ *
+ *  @return true - yes, false - no.
+ */
+bool bt_mesh_is_node(void);
+
 /** @brief Check if the local node has been provisioned.
  *
  *  This API can be used to check if the local node has been provisioned
@@ -525,6 +548,18 @@ int bt_mesh_provision(const u8_t net_key[16], u16_t net_idx,
  *  @return True if the node is provisioned. False otherwise.
  */
 bool bt_mesh_is_provisioned(void);
+
+/** @brief Check if the device is a Provisioner.
+ *
+ *  @return true - yes, false - no.
+ */
+bool bt_mesh_is_provisioner(void);
+
+/** @brief Check if the Provisioner is enabled
+ *
+ *  @return true - enabled, false - disabled.
+ */
+bool bt_mesh_is_provisioner_en(void);
 
 /** @brief Toggle the IV Update test mode
  *
@@ -554,10 +589,13 @@ bool bt_mesh_iv_update(void);
  *  from a battery power source.
  *
  *  @param enable  true to enable LPN functionality, false to disable it.
+ *  @param force   when disable LPN functionality, use this flag to indicate
+ *                 whether directly clear corresponding information or sending
+ *                 friend clear to disable it.
  *
  *  @return Zero on success or (negative) error code otherwise.
  */
-int bt_mesh_lpn_set(bool enable);
+int bt_mesh_lpn_set(bool enable, bool force);
 
 /** @brief Send out a Friend Poll message.
  *
@@ -576,6 +614,19 @@ int bt_mesh_lpn_poll(void);
  *  @param cb Function to call when the Friendship status changes.
  */
 void bt_mesh_lpn_set_cb(void (*cb)(u16_t friend_addr, bool established));
+
+/** @brief Register a callback for Friendship changes of friend node.
+ *
+ *  Registers a callback that will be called whenever Friendship gets
+ *  established or is terminated.
+ *
+ *  @param cb Function to call when the Friendship status of friend node changes.
+ */
+void bt_mesh_friend_set_cb(void (*cb)(bool establish, u16_t lpn_addr, u8_t reason));
+
+#ifdef __cplusplus
+}
+#endif
 
 /**
  * @}

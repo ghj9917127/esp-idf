@@ -45,6 +45,10 @@ typedef enum {
     ESP_BT_INIT_COD                = 0x0a,          /*!< overwrite major, minor, and service class */
 } esp_bt_cod_mode_t;
 
+#define ESP_BT_GAP_AFH_CHANNELS_LEN     10
+typedef uint8_t esp_bt_gap_afh_channels[ESP_BT_GAP_AFH_CHANNELS_LEN];
+
+
 /// Discoverability and Connectability mode
 typedef enum {
     ESP_BT_NON_CONNECTABLE,             /*!< Non-connectable */
@@ -79,21 +83,23 @@ typedef struct {
 } esp_bt_gap_dev_prop_t;
 
 /// Extended Inquiry Response data type
-typedef enum {
-    ESP_BT_EIR_TYPE_FLAGS                    = 0x01,     /*!< Flag with information such as BR/EDR and LE support */
-    ESP_BT_EIR_TYPE_INCMPL_16BITS_UUID       = 0x02,     /*!< Incomplete list of 16-bit service UUIDs */
-    ESP_BT_EIR_TYPE_CMPL_16BITS_UUID         = 0x03,     /*!< Complete list of 16-bit service UUIDs */
-    ESP_BT_EIR_TYPE_INCMPL_32BITS_UUID       = 0x04,     /*!< Incomplete list of 32-bit service UUIDs */
-    ESP_BT_EIR_TYPE_CMPL_32BITS_UUID         = 0x05,     /*!< Complete list of 32-bit service UUIDs */
-    ESP_BT_EIR_TYPE_INCMPL_128BITS_UUID      = 0x06,     /*!< Incomplete list of 128-bit service UUIDs */
-    ESP_BT_EIR_TYPE_CMPL_128BITS_UUID        = 0x07,     /*!< Complete list of 128-bit service UUIDs */
-    ESP_BT_EIR_TYPE_SHORT_LOCAL_NAME         = 0x08,     /*!< Shortened Local Name */
-    ESP_BT_EIR_TYPE_CMPL_LOCAL_NAME          = 0x09,     /*!< Complete Local Name */
-    ESP_BT_EIR_TYPE_TX_POWER_LEVEL           = 0x0a,     /*!< Tx power level, value is 1 octet ranging from  -127 to 127, unit is dBm*/
-    ESP_BT_EIR_TYPE_URL                      = 0x24,     /*!< Uniform resource identifier */
-    ESP_BT_EIR_TYPE_MANU_SPECIFIC            = 0xff,     /*!< Manufacturer specific data */
-} esp_bt_eir_type_t;
-#define  ESP_BT_EIR_TYPE_MAX_NUM             12          /*!< MAX number of EIR type */
+#define ESP_BT_EIR_TYPE_FLAGS                   0x01      /*!< Flag with information such as BR/EDR and LE support */
+#define ESP_BT_EIR_TYPE_INCMPL_16BITS_UUID      0x02      /*!< Incomplete list of 16-bit service UUIDs */
+#define ESP_BT_EIR_TYPE_CMPL_16BITS_UUID        0x03      /*!< Complete list of 16-bit service UUIDs */
+#define ESP_BT_EIR_TYPE_INCMPL_32BITS_UUID      0x04      /*!< Incomplete list of 32-bit service UUIDs */
+#define ESP_BT_EIR_TYPE_CMPL_32BITS_UUID        0x05      /*!< Complete list of 32-bit service UUIDs */
+#define ESP_BT_EIR_TYPE_INCMPL_128BITS_UUID     0x06      /*!< Incomplete list of 128-bit service UUIDs */
+#define ESP_BT_EIR_TYPE_CMPL_128BITS_UUID       0x07      /*!< Complete list of 128-bit service UUIDs */
+#define ESP_BT_EIR_TYPE_SHORT_LOCAL_NAME        0x08      /*!< Shortened Local Name */
+#define ESP_BT_EIR_TYPE_CMPL_LOCAL_NAME         0x09      /*!< Complete Local Name */
+#define ESP_BT_EIR_TYPE_TX_POWER_LEVEL          0x0a      /*!< Tx power level, value is 1 octet ranging from  -127 to 127, unit is dBm*/
+#define ESP_BT_EIR_TYPE_URL                     0x24      /*!< Uniform resource identifier */
+#define ESP_BT_EIR_TYPE_MANU_SPECIFIC           0xff      /*!< Manufacturer specific data */
+#define  ESP_BT_EIR_TYPE_MAX_NUM                12        /*!< MAX number of EIR type */
+
+typedef uint8_t esp_bt_eir_type_t;
+
+
 
 /* ESP_BT_EIR_FLAG bit definition */
 #define ESP_BT_EIR_FLAG_LIMIT_DISC         (0x01 << 0)
@@ -149,6 +155,16 @@ typedef enum {
 #define ESP_BT_IO_CAP_NONE                     3        /*!< NoInputNoOutput */     /* relate to BTM_IO_CAP_NONE in stack/btm_api.h */
 typedef uint8_t esp_bt_io_cap_t;                        /*!< combination of the io capability */
 
+
+/* BTM Power manager modes */
+#define ESP_BT_PM_MD_ACTIVE                 0x00        /*!< Active mode */
+#define ESP_BT_PM_MD_HOLD                   0x01        /*!< Hold mode */
+#define ESP_BT_PM_MD_SNIFF                  0x02        /*!< Sniff mode */
+#define ESP_BT_PM_MD_PARK                   0x03        /*!< Park state */
+typedef uint8_t esp_bt_pm_mode_t;
+
+
+
 /// Bits of major service class field
 #define ESP_BT_COD_SRVC_BIT_MASK              (0xffe000) /*!< Major service bit mask */
 #define ESP_BT_COD_SRVC_BIT_OFFSET            (13)       /*!< Major service bit offset */
@@ -202,6 +218,10 @@ typedef enum {
     ESP_BT_GAP_KEY_REQ_EVT,                         /*!< Simple Pairing Passkey request */
     ESP_BT_GAP_READ_RSSI_DELTA_EVT,                 /*!< read rssi event */
     ESP_BT_GAP_CONFIG_EIR_DATA_EVT,                 /*!< config EIR data event */
+    ESP_BT_GAP_SET_AFH_CHANNELS_EVT,                /*!< set AFH channels event */
+    ESP_BT_GAP_READ_REMOTE_NAME_EVT,                /*!< read Remote Name event */
+    ESP_BT_GAP_MODE_CHG_EVT,
+    ESP_BT_GAP_REMOVE_BOND_DEV_COMPLETE_EVT,         /*!< remove bond device complete event */
     ESP_BT_GAP_EVT_MAX,
 } esp_bt_gap_cb_event_t;
 
@@ -312,6 +332,38 @@ typedef union {
     struct key_req_param {
         esp_bd_addr_t bda;                     /*!< remote bluetooth device address*/
     } key_req;                                 /*!< passkey request parameter struct */
+
+    /**
+     * @brief ESP_BT_GAP_SET_AFH_CHANNELS_EVT
+     */
+    struct set_afh_channels_param {
+        esp_bt_status_t stat;                  /*!< set AFH channel status */
+    } set_afh_channels;                        /*!< set AFH channel parameter struct */
+
+    /**
+     * @brief ESP_BT_GAP_READ_REMOTE_NAME_EVT
+     */
+    struct read_rmt_name_param {
+        esp_bt_status_t stat;                  /*!< read Remote Name status */
+        uint8_t rmt_name[ESP_BT_GAP_MAX_BDNAME_LEN + 1]; /*!< Remote device name */
+    } read_rmt_name;                        /*!< read Remote Name parameter struct */
+
+    /**
+     * @brief ESP_BT_GAP_MODE_CHG_EVT
+     */
+    struct mode_chg_param {
+        esp_bd_addr_t bda;                      /*!< remote bluetooth device address*/
+        esp_bt_pm_mode_t mode;                  /*!< PM mode*/
+    } mode_chg;                                 /*!< mode change event parameter struct */
+
+    /**
+     * @brief ESP_BT_GAP_REMOVE_BOND_DEV_COMPLETE_EVT
+     */
+    struct bt_remove_bond_dev_cmpl_evt_param {
+        esp_bd_addr_t bda;                          /*!< remote bluetooth device address*/
+        esp_bt_status_t status;                     /*!< Indicate the remove bond device operation success status */
+    }remove_bond_dev_cmpl;                           /*!< Event parameter of ESP_BT_GAP_REMOVE_BOND_DEV_COMPLETE_EVT */
+
 } esp_bt_gap_cb_param_t;
 
 /**
@@ -326,7 +378,7 @@ typedef void (* esp_bt_gap_cb_t)(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_para
  * @param[in]       cod: Class of Device
  * @return          major service bits
  */
-inline uint32_t esp_bt_gap_get_cod_srvc(uint32_t cod)
+static inline uint32_t esp_bt_gap_get_cod_srvc(uint32_t cod)
 {
     return (cod & ESP_BT_COD_SRVC_BIT_MASK) >> ESP_BT_COD_SRVC_BIT_OFFSET;
 }
@@ -336,7 +388,7 @@ inline uint32_t esp_bt_gap_get_cod_srvc(uint32_t cod)
  * @param[in]       cod: Class of Device
  * @return          major device bits
  */
-inline uint32_t esp_bt_gap_get_cod_major_dev(uint32_t cod)
+static inline uint32_t esp_bt_gap_get_cod_major_dev(uint32_t cod)
 {
     return (cod & ESP_BT_COD_MAJOR_DEV_BIT_MASK) >> ESP_BT_COD_MAJOR_DEV_BIT_OFFSET;
 }
@@ -346,7 +398,7 @@ inline uint32_t esp_bt_gap_get_cod_major_dev(uint32_t cod)
  * @param[in]       cod: Class of Device
  * @return          minor service bits
  */
-inline uint32_t esp_bt_gap_get_cod_minor_dev(uint32_t cod)
+static inline uint32_t esp_bt_gap_get_cod_minor_dev(uint32_t cod)
 {
     return (cod & ESP_BT_COD_MINOR_DEV_BIT_MASK) >> ESP_BT_COD_MINOR_DEV_BIT_OFFSET;
 }
@@ -356,7 +408,7 @@ inline uint32_t esp_bt_gap_get_cod_minor_dev(uint32_t cod)
  * @param[in]       cod: Class of Device
  * @return          format type
  */
-inline uint32_t esp_bt_gap_get_cod_format_type(uint32_t cod)
+static inline uint32_t esp_bt_gap_get_cod_format_type(uint32_t cod)
 {
     return (cod & ESP_BT_COD_FORMAT_TYPE_BIT_MASK);
 }
@@ -368,7 +420,7 @@ inline uint32_t esp_bt_gap_get_cod_format_type(uint32_t cod)
  *                  - true if cod is valid
  *                  - false otherise
  */
-inline bool esp_bt_gap_is_valid_cod(uint32_t cod)
+static inline bool esp_bt_gap_is_valid_cod(uint32_t cod)
 {
     if (esp_bt_gap_get_cod_format_type(cod) == ESP_BT_COD_FORMAT_TYPE_1 &&
             esp_bt_gap_get_cod_srvc(cod) != ESP_BT_COD_SRVC_NONE) {
@@ -403,13 +455,15 @@ esp_err_t esp_bt_gap_register_callback(esp_bt_gap_cb_t callback);
 esp_err_t esp_bt_gap_set_scan_mode(esp_bt_connection_mode_t c_mode, esp_bt_discovery_mode_t d_mode);
 
 /**
- * @brief           Start device discovery. This function should be called after esp_bluedroid_enable() completes successfully.
- *                  esp_bt_gap_cb_t will be called with ESP_BT_GAP_DISC_STATE_CHANGED_EVT if discovery is started or halted.
- *                  esp_bt_gap_cb_t will be called with ESP_BT_GAP_DISC_RES_EVT if discovery result is got.
+ * @brief           This function starts Inquiry and Name Discovery. It should be called after esp_bluedroid_enable() completes successfully.
+ *                  When Inquiry is halted and cached results do not contain device name, then Name Discovery will connect to the peer target to get the device name.
+ *                  esp_bt_gap_cb_t will be called with ESP_BT_GAP_DISC_STATE_CHANGED_EVT when Inquriry is started or Name Discovery is completed.
+ *                  esp_bt_gap_cb_t will be called with ESP_BT_GAP_DISC_RES_EVT each time the two types of discovery results are got.
  *
- * @param[in]       mode - inquiry mode
- * @param[in]       inq_len - inquiry duration in 1.28 sec units, ranging from 0x01 to 0x30
- * @param[in]       num_rsps - number of inquiry responses that can be received, value 0 indicates an unlimited number of responses
+ * @param[in]       mode - Inquiry mode
+ * @param[in]       inq_len - Inquiry duration in 1.28 sec units, ranging from 0x01 to 0x30. This parameter only specifies the total duration of the Inquiry process,
+ *                          - when this time expires, Inquiry will be halted.
+ * @param[in]       num_rsps - Number of responses that can be received before the Inquiry is halted, value 0 indicates an unlimited number of responses.
  *
  * @return
  *                  - ESP_OK : Succeed
@@ -420,8 +474,9 @@ esp_err_t esp_bt_gap_set_scan_mode(esp_bt_connection_mode_t c_mode, esp_bt_disco
 esp_err_t esp_bt_gap_start_discovery(esp_bt_inq_mode_t mode, uint8_t inq_len, uint8_t num_rsps);
 
 /**
- * @brief           Cancel device discovery. This function should be called after esp_bluedroid_enable() completes successfully
- *                  esp_bt_gap_cb_t will be called with ESP_BT_GAP_DISC_STATE_CHANGED_EVT if discovery is stopped.
+ * @brief           Cancel Inquiry and Name Discovery. This function should be called after esp_bluedroid_enable() completes successfully.
+ *                  esp_bt_gap_cb_t will be called with ESP_BT_GAP_DISC_STATE_CHANGED_EVT if Inquiry or Name Discovery is cancelled by
+ *                  calling this function.
  *
  * @return
  *                  - ESP_OK : Succeed
@@ -636,6 +691,34 @@ esp_err_t esp_bt_gap_ssp_passkey_reply(esp_bd_addr_t bd_addr, bool accept, uint3
 esp_err_t esp_bt_gap_ssp_confirm_reply(esp_bd_addr_t bd_addr, bool accept);
 
 #endif /*(BT_SSP_INCLUDED == TRUE)*/
+
+/**
+* @brief            Set the AFH channels
+*
+* @param[in]        channels :  The n th such field (in the range 0 to 78) contains the value for channel n :
+*                               0 means channel n is bad.
+*                               1 means channel n is unknown.
+*                               The most significant bit is reserved and shall be set to 0.
+*                               At least 20 channels shall be marked as unknown.
+*
+* @return           - ESP_OK : success
+*                   - ESP_ERR_INVALID_STATE: if bluetooth stack is not yet enabled
+*                   - other  : failed
+*
+*/
+esp_err_t esp_bt_gap_set_afh_channels(esp_bt_gap_afh_channels channels);
+
+/**
+* @brief            Read the remote device name
+*
+* @param[in]        remote_bda: The remote device's address
+*
+* @return           - ESP_OK : success
+*                   - ESP_ERR_INVALID_STATE: if bluetooth stack is not yet enabled
+*                   - other  : failed
+*
+*/
+esp_err_t esp_bt_gap_read_remote_name(esp_bd_addr_t remote_bda);
 
 #ifdef __cplusplus
 }
